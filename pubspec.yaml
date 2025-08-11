@@ -1,0 +1,30 @@
+name: attendance_app
+description: A biometric attendance system with Excel export
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.6.2 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  sqflite: ^2.3.0
+  sqflite_common_ffi: ^2.3.0
+  path_provider: ^2.1.2
+  provider: ^6.0.5
+  excel: ^2.0.1
+  open_file: ^3.3.3
+  intl: ^0.18.1  # For date formatting
+  file_picker: ^8.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
