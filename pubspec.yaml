@@ -18,6 +18,7 @@ dependencies:
   open_file: ^3.3.3
   intl: ^0.18.1  # For date formatting
   file_picker: ^8.0.0
+  csv: ^5.0.0
 
 dev_dependencies:
   flutter_test:

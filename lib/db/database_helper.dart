@@ -191,4 +191,29 @@ class DatabaseHelper {
     }
     return map;
   }
+  // Bulk insert persons from a list of names
+static Future<void> insertPersonsBulk(List<String> names, String role) async {
+  if (names.isEmpty) return;
+  final db = await initDB();
+
+  await db.transaction((txn) async {
+    // Get current max empCode for this role
+    final res = await txn.rawQuery(
+      'SELECT MAX(empCode) as maxc FROM persons WHERE role = ?',
+      [role],
+    );
+    int empCode = (res.first['maxc'] as int? ?? 0);
+
+    for (var name in names) {
+      empCode++;
+      await txn.insert('persons', {
+        'name': name.trim(),
+        'empCode': empCode,
+        'role': role,
+      });
+      print("✅ Saved $role: $name (Code: $empCode)");
+    }
+  });
+}
+
 }
