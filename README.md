@@ -1,4 +1,4 @@
-# Gajanan Attendance System
+#Attendance System
 
 A comprehensive Flutter-based attendance management system for Gajanan Vidyalaya Deodhanora Tq Kallam.
 
