@@ -72,8 +72,12 @@ int _detectNameColumn(List<List<dynamic>> rows) {
 }
 
 // ----------- Main Import Function -----------
-Future<int> importNamesFromCSV(String role) async {
+Future<int> importNamesFromCSV(String role, {String? className}) async {
   try {
+    if (role == 'Student' && (className == null || className.isEmpty)) {
+      throw Exception("Class name is required for students.");
+    }
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'CSV'],
@@ -97,25 +101,21 @@ Future<int> importNamesFromCSV(String role) async {
 
     // Strip BOM if present
     content = content.replaceAll('\ufeff', '').trim();
-
     if (content.isEmpty) return 0;
 
     // --- Parse CSV ---
     List<List<dynamic>> rows;
     try {
-      // First try with comma (default)
       rows = const CsvToListConverter(eol: '\n').convert(content);
     } catch (_) {
       rows = [];
     }
 
-    // If only 1 row detected and content has semicolon
     if ((rows.isEmpty || rows.length == 1) && content.contains(';')) {
       rows = const CsvToListConverter(fieldDelimiter: ';', eol: '\n').convert(content);
     }
 
-    // If still empty, split manually (for plain name lists with no delimiter)
-    if (rows.isEmpty || (rows.length == 1 && rows.first.length == 1 && rows.first.first.toString().contains('\n'))) {
+    if (rows.isEmpty) {
       rows = content.split('\n').map((line) => [line.trim()]).toList();
     }
 
@@ -132,7 +132,7 @@ Future<int> importNamesFromCSV(String role) async {
 
     if (raw.isEmpty) return 0;
 
-    // --- Drop header if it looks like one ---
+    // --- Drop header if needed ---
     final firstLower = raw.first.toLowerCase();
     final hasHeader = firstLower.contains('name') || firstLower == 'student' || firstLower == 'staff';
     final names = (hasHeader ? raw.skip(1) : raw)
@@ -144,10 +144,12 @@ Future<int> importNamesFromCSV(String role) async {
     if (names.isEmpty) return 0;
 
     // --- Save to DB ---
-    await DatabaseHelper.insertPersonsBulk(names, role);
+    await DatabaseHelper.insertPersonsBulk(names, role, studentClass: className);
     return names.length;
   } catch (e) {
-    print('❌ Error importing $role CSV: $e');
+    
     return -1;
   }
 }
+
+

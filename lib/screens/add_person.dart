@@ -14,6 +14,7 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _empCodeController = TextEditingController();
+  String? _selectedClass; // For Students only
 
   @override
   void dispose() {
@@ -42,6 +43,7 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(
                     children: [
+                      // Name Field
                       TextFormField(
                         controller: _nameController,
                         decoration: const InputDecoration(
@@ -61,6 +63,8 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
+
+                      // Code Field
                       TextFormField(
                         controller: _empCodeController,
                         decoration: const InputDecoration(
@@ -81,6 +85,47 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
+
+                      // Dropdown for Student Class
+                      if (widget.role == 'Student') ...[
+                        DropdownButtonFormField<String>(
+                          value: _selectedClass,
+                          decoration: const InputDecoration(
+                            labelText: 'Select Class',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.school),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: '8th',
+                              child: Text('8th Class'),
+                            ),
+                            DropdownMenuItem(
+                              value: '9th',
+                              child: Text('9th Class'),
+                            ),
+                            DropdownMenuItem(
+                              value: '10th',
+                              child: Text('10th Class'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedClass = value;
+                            });
+                          },
+                          validator: (value) {
+                            if (widget.role == 'Student' &&
+                                (value == null || value.isEmpty)) {
+                              return 'Please select a class';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Info Box
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -108,48 +153,55 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
+
+              // Save Button
               ElevatedButton.icon(
                 onPressed: () async {
                   if (_formKey.currentState!.validate()) {
-                    // Show loading dialog
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (context) => const Center(child: CircularProgressIndicator()),
+                      builder: (context) =>
+                          const Center(child: CircularProgressIndicator()),
                     );
-                    
+
                     try {
                       final name = _nameController.text.trim();
-                      final empCode = _empCodeController.text.isNotEmpty 
-                          ? int.parse(_empCodeController.text) 
+                      final empCode = _empCodeController.text.isNotEmpty
+                          ? int.parse(_empCodeController.text)
                           : 0;
-                      
+
                       final p = Person(
-                        name: name, 
-                        empCode: empCode, 
-                        role: widget.role
+                        name: name,
+                        empCode: empCode,
+                        role: widget.role,
+                        studentClass:
+                            widget.role == 'Student' ? _selectedClass : null,
                       );
-                      
+
                       await DatabaseHelper.insertPerson(p);
-                      
-                      Navigator.pop(context); // Close loading dialog
+
+                      Navigator.pop(context); // Close loading
                       if (!context.mounted) return;
-                      Navigator.pop(context, true); // Return to previous screen
-                      
+                      Navigator.pop(context, true); // Go back
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('${widget.role} added successfully!'),
+                          content:
+                              Text('${widget.role} added successfully!'),
                           backgroundColor: Colors.green,
                           duration: const Duration(seconds: 2),
                         ),
                       );
                     } catch (e) {
-                      Navigator.pop(context); // Close loading dialog
+                      Navigator.pop(context); // Close loading
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text('Error adding ${widget.role}: $e'),
+                          content:
+                              Text('Error adding ${widget.role}: $e'),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -165,6 +217,8 @@ class _AddPersonScreenState extends State<AddPersonScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+
+              // Cancel Button
               OutlinedButton.icon(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.cancel),

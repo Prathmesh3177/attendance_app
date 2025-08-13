@@ -218,39 +218,92 @@ class _MonthScreenState extends State<MonthScreen> {
           const Divider(),
 
           Expanded(
-            child: ListView.builder(
-              itemCount: persons.length,
-              itemBuilder: (context, idx) {
-                final p = persons[idx];
-                return Card(
-                  child: ListTile(
-                    title: Text('${p.empCode} - ${p.name} (${p.role})'),
-                    subtitle: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(children: List.generate(daysInMonth, (i) {
-                        final day = i + 1;
-                        final isHol = holidays.contains(day);
-                        final leaveType = personLeaves[p.id]?[day];
-                        final weekday = DateTime(selected.year, selected.month, day).weekday;
-                        final isWO = (weekday == DateTime.sunday);
-                        final label = isHol ? 'H' : (leaveType != null ? leaveType : (isWO ? 'WO' : 'P'));
-                        return GestureDetector(
-                          onTap: () => editPersonDay(p, day),
-                          child: Container(
-                            margin: const EdgeInsets.all(2),
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                            decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(4)),
-                            child: Text(label),
-                          ),
-                        );
-                      })),
+            child: persons.isEmpty
+                ? const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people_outline, size: 64, color: Colors.grey),
+                        SizedBox(height: 16),
+                        Text('No users found', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                      ],
                     ),
-                  ),
-                );
-              },
-            ),
+                  )
+                : Builder(builder: (context) {
+                    final List<Widget> grouped = [];
+
+                    // Staff section
+                    if (persons.any((p) => p.role == 'Staff')) {
+                      grouped.add(
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                          child: Text('Staff', style: Theme.of(context).textTheme.titleMedium),
+                        ),
+                      );
+                      final staffList = persons
+                          .where((p) => p.role == 'Staff')
+                          .toList()
+                        ..sort((a, b) => a.empCode.compareTo(b.empCode));
+                      grouped.addAll(staffList.map((p) => _buildPersonRow(p, daysInMonth)));
+                    }
+
+                    // Student sections by class
+                    final classes = persons
+                        .where((p) => p.role == 'Student' && (p.studentClass ?? '').isNotEmpty)
+                        .map((p) => p.studentClass!)
+                        .toSet()
+                        .toList()
+                      ..sort((a, b) {
+                        int pa = int.tryParse(RegExp(r'^(\d+)').firstMatch(a)?.group(1) ?? '') ?? 999;
+                        int pb = int.tryParse(RegExp(r'^(\d+)').firstMatch(b)?.group(1) ?? '') ?? 999;
+                        return pa.compareTo(pb);
+                      });
+                    for (final cls in classes) {
+                      grouped.add(
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+                          child: Text('Student - $cls', style: Theme.of(context).textTheme.titleMedium),
+                        ),
+                      );
+                      final list = persons
+                          .where((p) => p.role == 'Student' && (p.studentClass ?? '') == cls)
+                          .toList()
+                        ..sort((a, b) => a.empCode.compareTo(b.empCode));
+                      grouped.addAll(list.map((p) => _buildPersonRow(p, daysInMonth)));
+                    }
+
+                    return ListView(children: grouped);
+                  }),
           )
         ],
+      ),
+    );
+  }
+
+  Widget _buildPersonRow(Person p, int daysInMonth) {
+    return Card(
+      child: ListTile(
+        title: Text('${p.empCode} - ${p.name} (${p.role}${p.role == 'Student' && (p.studentClass ?? '').isNotEmpty ? ' / ${p.studentClass}' : ''})'),
+        subtitle: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(children: List.generate(daysInMonth, (i) {
+            final day = i + 1;
+            final isHol = holidays.contains(day);
+            final leaveType = personLeaves[p.id]?[day];
+            final weekday = DateTime(selected.year, selected.month, day).weekday;
+            final isWO = (weekday == DateTime.sunday);
+            final label = isHol ? 'H' : (leaveType != null ? leaveType : (isWO ? 'WO' : 'P'));
+            return GestureDetector(
+              onTap: () => editPersonDay(p, day),
+              child: Container(
+                margin: const EdgeInsets.all(2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                decoration: BoxDecoration(border: Border.all(), borderRadius: BorderRadius.circular(4)),
+                child: Text(label),
+              ),
+            );
+          })),
+        ),
       ),
     );
   }

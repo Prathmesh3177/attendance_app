@@ -15,22 +15,22 @@ class DatabaseHelper {
     return _db ??= await factory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3, // bumped to 3 because of studentClass
         onCreate: (db, version) async {
-          // First time DB creation
           await _createTables(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
-          // Handle migrations between versions
           if (oldVersion < 2) {
             await _migrateToV2(db);
           }
+          if (oldVersion < 3) {
+            await _migrateToV3(db);
+          }
         },
         onOpen: (db) async {
-          // Ensure tables exist for old DBs
           await _createTables(db);
-          // Also ensure columns exist if DB was created by an older app version
           await _migrateToV2(db);
+          await _migrateToV3(db);
         },
       ),
     );
@@ -42,7 +42,8 @@ class DatabaseHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT,
         empCode INTEGER,
-        role TEXT
+        role TEXT,
+        studentClass TEXT
       )
     ''');
 
@@ -67,11 +68,9 @@ class DatabaseHelper {
     ''');
   }
 
-  // Migration helpers
   static Future<void> _migrateToV2(Database db) async {
-    // Ensure persons table has empCode and role columns
     final res = await db.rawQuery("PRAGMA table_info(persons)");
-    final columnNames = res.map((row) => (row['name'] as Object?).toString()).toSet();
+    final columnNames = res.map((row) => row['name'].toString()).toSet();
     if (!columnNames.contains('empCode')) {
       await db.execute('ALTER TABLE persons ADD COLUMN empCode INTEGER');
     }
@@ -80,19 +79,37 @@ class DatabaseHelper {
     }
   }
 
-  // Insert person with numeric empCode auto-generation per role
+  static Future<void> _migrateToV3(Database db) async {
+    final res = await db.rawQuery("PRAGMA table_info(persons)");
+    final columnNames = res.map((row) => row['name'].toString()).toSet();
+    if (!columnNames.contains('studentClass')) {
+      await db.execute('ALTER TABLE persons ADD COLUMN studentClass TEXT');
+    }
+  }
+
+  // Insert person
   static Future<int> insertPerson(Person p) async {
     final db = await initDB();
     if (p.empCode == 0) {
-      final res = await db.rawQuery(
-        'SELECT MAX(empCode) as maxc FROM persons WHERE role = ?',
-        [p.role],
-      );
-      final maxc = res.first['maxc'] as int? ?? 0;
+      int maxc = 0;
+      if (p.role == 'Student' && p.studentClass != null && p.studentClass!.isNotEmpty) {
+        final res = await db.rawQuery(
+          'SELECT MAX(empCode) as maxc FROM persons WHERE role = ? AND studentClass = ?',
+          [p.role, p.studentClass],
+        );
+        maxc = res.first['maxc'] as int? ?? 0;
+      } else {
+        final res = await db.rawQuery(
+          'SELECT MAX(empCode) as maxc FROM persons WHERE role = ?',
+          [p.role],
+        );
+        maxc = res.first['maxc'] as int? ?? 0;
+      }
       p.empCode = maxc + 1;
     }
     final id = await db.insert('persons', p.toMap());
-    print("✅ Saved ${p.role}: ${p.name} (Code: ${p.empCode})");
+    print(
+        "✅ Saved ${p.role}: ${p.name} (Code: ${p.empCode}, Class: ${p.studentClass ?? 'N/A'})");
     return id;
   }
 
@@ -191,29 +208,60 @@ class DatabaseHelper {
     }
     return map;
   }
-  // Bulk insert persons from a list of names
-static Future<void> insertPersonsBulk(List<String> names, String role) async {
-  if (names.isEmpty) return;
-  final db = await initDB();
 
-  await db.transaction((txn) async {
-    // Get current max empCode for this role
-    final res = await txn.rawQuery(
-      'SELECT MAX(empCode) as maxc FROM persons WHERE role = ?',
-      [role],
-    );
-    int empCode = (res.first['maxc'] as int? ?? 0);
+  // Bulk insert persons
+  static Future<void> insertPersonsBulk(
+      List<String> names, String role, {String? studentClass}) async {
+    if (names.isEmpty) return;
+    final db = await initDB();
 
-    for (var name in names) {
-      empCode++;
-      await txn.insert('persons', {
-        'name': name.trim(),
-        'empCode': empCode,
-        'role': role,
-      });
-      print("✅ Saved $role: $name (Code: $empCode)");
-    }
-  });
-}
+    await db.transaction((txn) async {
+      int empCode = 0;
+      if (role == 'Student' && studentClass != null && studentClass.isNotEmpty) {
+        final res = await txn.rawQuery(
+          'SELECT MAX(empCode) as maxc FROM persons WHERE role = ? AND studentClass = ?',
+          [role, studentClass],
+        );
+        empCode = (res.first['maxc'] as int? ?? 0);
+      } else {
+        final res = await txn.rawQuery(
+          'SELECT MAX(empCode) as maxc FROM persons WHERE role = ?',
+          [role],
+        );
+        empCode = (res.first['maxc'] as int? ?? 0);
+      }
 
+      for (var name in names) {
+        empCode++;
+        await txn.insert('persons', {
+          'name': name.trim(),
+          'empCode': empCode,
+          'role': role,
+          'studentClass': studentClass,
+        });
+        print(
+            "✅ Saved $role: $name (Code: $empCode, Class: ${studentClass ?? 'N/A'})");
+      }
+    });
+  }
+
+  // Bulk delete persons by role (and their leaves)
+  static Future<int> deleteAllPersonsByRole(String role) async {
+    final db = await initDB();
+    return await db.transaction<int>((txn) async {
+      // Collect ids of persons for the role
+      final idRows = await txn.query('persons', columns: ['id'], where: 'role = ?', whereArgs: [role]);
+      final ids = idRows.map((e) => e['id'] as int).toList();
+
+      // Delete leaves associated with these persons first
+      if (ids.isNotEmpty) {
+        final placeholders = List.filled(ids.length, '?').join(',');
+        await txn.delete('leaves', where: 'personId IN ($placeholders)', whereArgs: ids);
+      }
+
+      // Delete persons
+      final deleted = await txn.delete('persons', where: 'role = ?', whereArgs: [role]);
+      return deleted;
+    });
+  }
 }

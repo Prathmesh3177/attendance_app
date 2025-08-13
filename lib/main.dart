@@ -1,6 +1,6 @@
 import 'package:attendance_app/screens/splash_screen.dart';
 import 'package:flutter/material.dart';
-import 'screens/home_screen.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

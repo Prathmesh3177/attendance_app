@@ -127,13 +127,65 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (count > 0) await load();
                     }),
                 ActionButton(
-                    title: 'Import Student CSV',
-                    icon: Icons.upload_file,
-                    color: Colors.orange,
-                    onTap: () async {
-                      final count = await importNamesFromCSV('Student');
+                  title: 'Import Student CSV',
+                  icon: Icons.upload_file,
+                  color: Colors.orange,
+                  onTap: () async {
+                    final className = await showDialog<String>(
+                      context: context,
+                      builder: (context) {
+                        String selectedClass = '8th'; // default
+                        return AlertDialog(
+                          title: const Text('Select Class'),
+                          content: StatefulBuilder(
+                            builder: (context, setState) {
+                              return DropdownButtonFormField<String>(
+                                value: selectedClass,
+                                decoration: const InputDecoration(
+                                  labelText: 'Class',
+                                  border: OutlineInputBorder(),
+                                ),
+                                items: const [
+                                  DropdownMenuItem(
+                                      value: '8th', child: Text('8th')),
+                                  DropdownMenuItem(
+                                      value: '9th', child: Text('9th')),
+                                  DropdownMenuItem(
+                                      value: '10th', child: Text('10th')),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() => selectedClass = value);
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, null),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.pop(context, selectedClass);
+                              },
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (className != null && className.isNotEmpty) {
+                      final count = await importNamesFromCSV('Student',
+                          className: className);
                       if (count > 0) await load();
-                    }),
+                    }
+                  },
+                ),
+
+
                 ActionButton(
                     title: 'Export Excel',
                     icon: Icons.file_download,
@@ -147,9 +199,71 @@ class _HomeScreenState extends State<HomeScreen> {
                         lastDate: DateTime(now.year + 2),
                         initialDatePickerMode: DatePickerMode.year,
                       );
-                      if (picked != null) {
-                        await exportAttendance(
-                            context, DateTime(picked.year, picked.month, 1),persons);
+                      if (picked == null) return;
+
+                      // Ask scope
+                      final scope = await showDialog<String>(
+                        context: context,
+                        builder: (context) {
+                          String? selectedClass;
+                          return AlertDialog(
+                            title: const Text('Export Scope'),
+                            content: StatefulBuilder(
+                              builder: (context, setState) {
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ListTile(
+                                      title: const Text('All'),
+                                      leading: const Icon(Icons.group),
+                                      onTap: () => Navigator.pop(context, 'all'),
+                                    ),
+                                    const Divider(),
+                                    ListTile(
+                                      title: const Text('Staff only'),
+                                      leading: const Icon(Icons.work),
+                                      onTap: () => Navigator.pop(context, 'staff'),
+                                    ),
+                                    const Divider(),
+                                    const Text('Student class:'),
+                                    const SizedBox(height: 8),
+                                    DropdownButtonFormField<String>(
+                                      value: selectedClass,
+                                      decoration: const InputDecoration(border: OutlineInputBorder()),
+                                      items: const [
+                                        DropdownMenuItem(value: '8th', child: Text('8th')),
+                                        DropdownMenuItem(value: '9th', child: Text('9th')),
+                                        DropdownMenuItem(value: '10th', child: Text('10th')),
+                                      ],
+                                      onChanged: (v) => setState(() => selectedClass = v),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, selectedClass == null ? null : 'student:$selectedClass'),
+                                        child: const Text('Export Student Class'),
+                                      ),
+                                    )
+                                  ],
+                                );
+                              },
+                            ),
+                          );
+                        },
+                      );
+
+                      if (scope == null) return;
+
+                      final month = DateTime(picked.year, picked.month, 1);
+                      if (scope == 'all') {
+                        await exportAttendance(context, month, persons);
+                      } else if (scope == 'staff') {
+                        await exportAttendance(context, month, persons, scope: ExportScope.staff);
+                      } else if (scope.startsWith('student:')) {
+                        final cls = scope.split(':').last;
+                        await exportAttendance(context, month, persons, scope: ExportScope.studentClass, studentClass: cls);
                       }
                     }),
               ],
